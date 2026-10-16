@@ -7,7 +7,6 @@ from typing import List, Tuple, Optional
 
 class PairExtractor:
     TARGET_POS = {"NOUN", "ADJF", "ADJS"}
-    EXCLUDE_POS = {"PREP", "CONJ", "PRCL", "INTJ", "NPRO", "NUMR"}
 
     def __init__(self):
         self.morph = pymorphy3.MorphAnalyzer()
@@ -28,16 +27,13 @@ class PairExtractor:
             raise FileNotFoundError(f"Файл не найден: {path}")
         return path.read_text(encoding="utf-8")
 
-    def _filter_valid_parses(self, word: str) -> List[pymorphy3.analyzer.Parse]:
+    def _get_valid_parses(self, word: str) -> List[pymorphy3.analyzer.Parse]:
+        if not re.match(r"^[а-яА-ЯёЁ-]+$", word):
+            return []
+
         parses = self.morph.parse(word)
-        if not parses:
-            return []
-
-        top_parse = parses[0]
-        if top_parse.tag.POS in self.EXCLUDE_POS:
-            return []
-
         valid_parses = []
+
         for p in parses:
             tag_str = str(p.tag)
 
@@ -68,8 +64,8 @@ class PairExtractor:
     def _find_matching_parse_pair(
         self, word1: str, word2: str
     ) -> Optional[Tuple[str, str]]:
-        parses1 = self._filter_valid_parses(word1)
-        parses2 = self._filter_valid_parses(word2)
+        parses1 = self._get_valid_parses(word1)
+        parses2 = self._get_valid_parses(word2)
 
         if not parses1 or not parses2:
             return None
@@ -88,11 +84,9 @@ class PairExtractor:
 
         for sent in sentences:
             raw_tokens = nltk.word_tokenize(sent, language="russian")
-            
-            words = [w for w in raw_tokens if re.match(r"^[а-яА-ЯёЁa-zA-Z]+$", w)]
 
-            for i in range(len(words) - 1):
-                w1, w2 = words[i], words[i + 1]
+            for i in range(len(raw_tokens) - 1):
+                w1, w2 = raw_tokens[i], raw_tokens[i + 1]
 
                 pair_lemmas = self._find_matching_parse_pair(w1, w2)
                 if pair_lemmas:
@@ -103,6 +97,7 @@ class PairExtractor:
     def process_file(self, file_path: str | Path) -> List[Tuple[str, str]]:
         text = self._read_file(file_path)
         return self.extract_pairs_from_text(text)
+
 
 if __name__ == "__main__":
     input_filename = Path(__file__).parent / "test_nlp_input.txt"
